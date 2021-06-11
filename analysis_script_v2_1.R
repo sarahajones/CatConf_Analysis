@@ -22,13 +22,12 @@ library(ggpmisc)
 library(viridis)
 library(car)
 library(stats)
-
 library(emmeans) #pairwise ttests
 library(afex) #running ANOVA
 
 ###################################################
 #DATA LOADING, CLEANING, AND TIDYING
-mydir = setwd("C:/Users/saraha/Desktop/Pilot_Data_V2.1")
+mydir = setwd("C:/Users/A-J/Desktop/Data_V2.1")
 myfiles = list.files(path=mydir, pattern="zapBox_v0.2.1_*", full.names=TRUE) #pull all files
 dat_csv = ldply(myfiles, read_csv) #load in data
 
@@ -76,6 +75,9 @@ feedback_thought <- feedback_thought$feedback_comments
 feedback_thought
 # enjoyed/positive
 
+########################################################
+#apply exclusion criteria here
+
 
 ########################################################
 #EXPERIMENTAL INFO
@@ -92,17 +94,17 @@ timeout <- subset(dat_csv, time_elapsed > 7000000)
 ageData <- subset(dat_csv, participantAge != "NA")
 summary(ageData$participantAge)#mean 33
 range(ageData$participantAge) #18-64
-sd(ageData$participantAge) #12.8
+sd(ageData$participantAge) #12.7
 
 #what is the gender split?
 genderData <- subset(dat_csv, participantGender != 'NA')
-gender <- genderData$participantGender #34 female 24 male
+gender <- genderData$participantGender #36 female 24 male
 female <- sum(gender == 'female')
 
 #what handedness do we have?
 handData <- subset(dat_csv, participantHandedness != 'NA')
 handedness <- handData$participantHandedness
-right <- sum(handedness == "right") #52 right, 5 left, 1 ambi
+right <- sum(handedness == "right") #54 right, 5 left, 1 ambi
 
 #########################################################################
 #QUICKFIRE ROUNDS
@@ -128,7 +130,6 @@ PIDwiseQuickfireAccuracy + xlim(1, length(completeParticipants))+ ylim(0, 1)
 #looks pretty good - only 2 below 75 and none at chance
 
 #split half
-#trialsOfInterest <- range(quickfireData$trial_index) #9-28
 correctQuickfire1stHalf <- subset(quickfireData, trial_index <18)
 correctQuickfire2ndHalf <- subset(quickfireData, trial_index >=19)
 
@@ -149,6 +150,8 @@ PIDwiseSplitHalfQuickfireAccuracy + xlim(1,length(completeParticipants)) + ylim(
 #2 pp of concern? 
 #1 very low score in first half (explore) but then at ceiling for second pp58
 #other at chance in second half? pp41
+
+
 
 
 #########################################################################
@@ -316,8 +319,8 @@ unclearData <- subset(unclearData, RT != 'NA')
 
 unclearCorrect <- subset(unclearData, correct == 1)
 unclearIncorrect <- subset(unclearData, incorrect == 1)
-avgCorrectRT <- mean(unclearCorrect$RT) #1773
-avgIncorrectRT <- mean(unclearIncorrect$RT) #2060
+avgCorrectRT <- mean(unclearCorrect$RT) #1795
+avgIncorrectRT <- mean(unclearIncorrect$RT) #1928
 
 #reaction time per participant
 unclearCorrectPID <- unclearCorrect %>% 
