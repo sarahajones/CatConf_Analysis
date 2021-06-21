@@ -1,4 +1,4 @@
-#Analysis Script - CatConf Behavioural Data, Pilot Study - V2.1. 
+#Analysis Script - CatConf Behavioural Data, Study - V2.1. 
 #behavioural analysis of pilot study
 library(plyr) 
 library(readr) 
@@ -109,7 +109,13 @@ right <- sum(handedness == "right") #54 right, 5 left, 1 ambi
 #########################################################################
 #QUICKFIRE ROUNDS
 #look at quickfire rounds for accuracy rates(did the participants learn a pairing) 
-quickfireData <- subset(dat_csv, trial_type == 'jspsych-quickfire') #200 trials across 10 pp
+quickfireData <- subset(dat_csv, trial_type == 'jspsych-quickfire') #1200 trials across 60 pp
+trials <- c(1:1200)
+for (i in trials){
+  if(quickfireData$button[i] == "null"){
+    quickfireData$correct[i] = 0
+    quickfireData$incorrect[i] =1 
+  }} #reset NA values
 
 #feedback = images/coins.png, or images/bomb.png; button 0 = Retrieve, button 1 = Zap
 correctCoins <- subset(quickfireData, quickfireData$feedback == 'images/coins.png' & quickfireData$button == 0)
@@ -118,6 +124,7 @@ correctQuickfire <- rbind(correctBombs, correctCoins)
 quickfireTrials <- 20
 quickfireAccuracy <- ((nrow(correctQuickfire)/(quickfireTrials*numParticipants))*100) 
 # mean accuracy in quickfire is 89.5%
+
 
 #per participant?
 PIDwiseCorrectQuickfire <- quickfireData %>% 
@@ -148,7 +155,7 @@ PIDwiseSplitHalfQuickfireAccuracy <- ggplot(data = splithalf) +
   labs(title="Split Half-Participant Quickfire Accuracy", x="PID", y="Accuracy") 
 PIDwiseSplitHalfQuickfireAccuracy + xlim(1,length(completeParticipants)) + ylim(0, 1)
 #2 pp of concern? 
-#1 very low score in first half (explore) but then at ceiling for second pp58
+#3 below average for second half - pp10, p21 and pp 18?
 #other at chance in second half? pp41
 
 
@@ -312,6 +319,13 @@ blockPIDwideCloudAccuracyPlot + xlim(1,numParticipants) + ylim(0, 1)
 #overall accuracy high across participants and blocks
 #participants 10/21/58 look low across all blocks 
 
+#get an average pp accuracy across all blocks. 
+
+testAccuracy <- blockPIDwideCloudAccuracy %>%
+  group_by(PID)%>%
+  summarise(accuracyMean = mean(grp.mean))
+
+testAccuracy$quickfireAccuracy <- 
 
 #reaction time
 unclearData$RT <- as.numeric(as.character(unclearData$delta_response_time))
