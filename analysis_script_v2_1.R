@@ -1,5 +1,8 @@
 #Analysis Script - CatConf Behavioural Data, Study - V2.1. 
-#behavioural analysis of pilot study
+#behavioural analysis of study data including data cleaning and exclusion work
+
+###################################################
+#LOAD IN PACKAGES REQUIRED
 library(plyr) 
 library(readr) 
 library(tidyverse)
@@ -27,7 +30,7 @@ library(afex) #running ANOVA
 
 ###################################################
 #DATA LOADING, CLEANING, AND TIDYING
-mydir = setwd("C:/Users/A-J/Desktop/Data_V2.1")
+mydir = setwd("C:/Users/saraha/Desktop/ConfCats/ConfCats_Version2/Data_V2.1")
 myfiles = list.files(path=mydir, pattern="zapBox_v0.2.1_*", full.names=TRUE) #pull all files
 dat_csv = ldply(myfiles, read_csv) #load in data
 
@@ -56,39 +59,8 @@ if (nrow(PIS<- subset(dat_csv, PIS == 'TRUE')) != numParticipants){
 if (nrow(consent <- subset(dat_csv, consent == 'TRUE')) != numParticipants){
   errorCondition('CONSENT ERROR')
 }
+
 #######################################################
-#PARTICIPANT COMMENTS
-#check on the recorded comments
-
-feedback_strat <- subset(dat_csv, feedback_strategy != 'NA')
-feedback_strat <- feedback_strat$feedback_strategy
-feedback_strat
-#seem to follow sensible strategies - little too much left V right maybe? 
-
-feedback_tech <- subset(dat_csv, feedback_technical != 'NA')
-feedback_tech <- feedback_tech$feedback_technical
-feedback_tech
-#no tech issues reported 
-
-feedback_thought <- subset(dat_csv, feedback_comments != 'NA')
-feedback_thought <- feedback_thought$feedback_comments
-feedback_thought
-# enjoyed/positive
-
-########################################################
-#apply exclusion criteria here
-
-
-########################################################
-#EXPERIMENTAL INFO
-#how long did the experiment take on average to complete?
-lastTrials <- subset(dat_csv, trial_index > 500)
-minutesTaken <- ((lastTrials$time_elapsed/60)/1000)
-averageTime <- summary(minutesTaken) 
-averageTime
-sd(minutesTaken)
-#mean 34, range - 23-65
-timeout <- subset(dat_csv, time_elapsed > 7000000)
 #DEMOGRAPHICS
 #what is the age, mean, range?
 ageData <- subset(dat_csv, participantAge != "NA")
@@ -100,16 +72,90 @@ sd(ageData$participantAge) #12.7
 genderData <- subset(dat_csv, participantGender != 'NA')
 gender <- genderData$participantGender #36 female 24 male
 female <- sum(gender == 'female')
+male <- sum(gender == 'male')
+nonbinary <- sum(gender == 'non-binary')
 
 #what handedness do we have?
 handData <- subset(dat_csv, participantHandedness != 'NA')
 handedness <- handData$participantHandedness
 right <- sum(handedness == "right") #54 right, 5 left, 1 ambi
+ambi <- sum(handedness == 'ambidextrous')
+
+#######################################################
+#PARTICIPANT COMMENTS
+feedback_strat <- subset(dat_csv, feedback_strategy != 'NA')
+feedback_strat <- feedback_strat$feedback_strategy
+feedback_strat
+#seem to follow sensible strategies - little too much left V right maybe? 
+
+feedback_tech <- subset(dat_csv, feedback_technical != 'NA')
+feedback_tech <- feedback_tech$feedback_technical
+feedback_tech
+#no tech issues reported - would like to know how many blocks there are left - consider for future iterations
+
+feedback_thought <- subset(dat_csv, feedback_comments != 'NA')
+feedback_thought <- feedback_thought$feedback_comments
+feedback_thought
+# enjoyed/positive
+
+########################################################
+#apply exclusion criteria here
+#2sd of the mean accuracy in both quickfire and confidence trials
+
+#look at quickfire first
+quickfireData <- subset(dat_csv, trial_type == 'jspsych-quickfire') #1200 trials across 60 pp
+trials <- c(1:1200)
+for (i in trials){
+  if(quickfireData$button[i] == "null"){
+    quickfireData$correct[i] = 0
+    quickfireData$incorrect[i] =1 
+  }} #reset NA values
+
+PIDwiseQuickfire <- quickfireData %>% 
+  group_by(PID) %>%
+  summarise(meanQuick = mean(correct))
+
+averageQuick <- mean(PIDwiseQuickfire$meanQuick) #93.1666 average
+sdQuick <- sd(PIDwiseQuickfire$meanQuick) #8.971
+cutoffLow <- averageQuick - 2*sdQuick
+cutoffHigh <- averageQuick + 2*sdQuick
+excludeQuick <- subset(PIDwiseQuickfire, meanQuick < cutoffLow | meanQuick > cutoffHigh) #potential exclusion list
+
+#look at confidence trials 
+unclearData <- subset(dat_csv, block > 0)
+PIDwiseCloudy <- unclearData %>% 
+  group_by(PID) %>%
+  summarise(meanCloud = mean(correct))
+averageCloud <- mean(PIDwiseCloudy$meanCloud) #81.1
+sdCloud <- sd(PIDwiseCloudy$meanCloud) #12.5
+
+cutoffLow <- averageCloud - 2*sdCloud
+cutoffHigh <- averageCloud + 2*sdCloud
+excludeCloud <- subset(PIDwiseCloudy, meanCloud < cutoffLow | meanCloud > cutoffHigh) #potential exclusion list
+
+#cross over of 3 partipants, total of 8 exclusion candidates. 
+#proceed with these PIDs to be removed. 
+excludePIDs <- unique(c(excludeQuick$PID, excludeCloud$PID))
+dat_csv <- dat_csv[ ! dat_csv$PID %in% excludePIDs, ]
+new_data <- dat_csv
+#exclusion criteria have now been applied, proceed as normal from here. 
+
+completeParticipants <- unique(new_data$PID)
+########################################################
+#EXPERIMENTAL INFO
+#how long did the experiment take on average to complete?
+lastTrials <- subset(new_data, trial_index > 500)
+minutesTaken <- ((lastTrials$time_elapsed/60)/1000)
+averageTime <- summary(minutesTaken) 
+averageTime
+sd(minutesTaken)
+#mean 34, range - 23-65
+timeout <- subset(new_data, time_elapsed > 7000000) # just 1 pp, pp25 who is running long
 
 #########################################################################
 #QUICKFIRE ROUNDS
 #look at quickfire rounds for accuracy rates(did the participants learn a pairing) 
-quickfireData <- subset(dat_csv, trial_type == 'jspsych-quickfire') #1200 trials across 60 pp
+quickfireData <- subset(new_data, trial_type == 'jspsych-quickfire') #1200 trials across 60 pp
 trials <- c(1:1200)
 for (i in trials){
   if(quickfireData$button[i] == "null"){
@@ -122,8 +168,8 @@ correctCoins <- subset(quickfireData, quickfireData$feedback == 'images/coins.pn
 correctBombs <- subset(quickfireData, quickfireData$feedback == 'images/bomb.png' & quickfireData$button == 1)
 correctQuickfire <- rbind(correctBombs, correctCoins)
 quickfireTrials <- 20
-quickfireAccuracy <- ((nrow(correctQuickfire)/(quickfireTrials*numParticipants))*100) 
-# mean accuracy in quickfire is 89.5%
+quickfireAccuracy <- ((nrow(correctQuickfire)/(quickfireTrials*length(completeParticipants))*100)) 
+# mean accuracy in quickfire is 93.5%
 
 
 #per participant?
@@ -134,7 +180,7 @@ PIDwiseQuickfireAccuracy <- ggplot(data = PIDwiseCorrectQuickfire) +
   geom_point(mapping = aes(x = PID, y = mean)) +
   labs(title="Participant Quickfire Accuracy", x="PID", y="Accuracy") 
 PIDwiseQuickfireAccuracy + xlim(1, length(completeParticipants))+ ylim(0, 1)
-#looks pretty good - only 2 below 75 and none at chance
+#looks pretty good - exclusions tidied up
 
 #split half
 correctQuickfire1stHalf <- subset(quickfireData, trial_index <18)
@@ -153,38 +199,33 @@ splithalf <- rbind(PIDwiseCorrectQuickfire1stHalf, PIDwiseCorrectQuickfire2ndHal
 PIDwiseSplitHalfQuickfireAccuracy <- ggplot(data = splithalf) +
   geom_point(mapping = aes(x = PID, y = grp.mean, color = split_half)) +
   labs(title="Split Half-Participant Quickfire Accuracy", x="PID", y="Accuracy") 
+
 PIDwiseSplitHalfQuickfireAccuracy + xlim(1,length(completeParticipants)) + ylim(0, 1)
-#2 pp of concern? 
-#3 below average for second half - pp10, p21 and pp 18?
-#other at chance in second half? pp41
-
-
-
 
 #########################################################################
 #TRAINING FASTDROP "CLEAR DAY" TRIALS 
 #check up on distribution properties. 
 #calculate the mean and variance for each and see if it maps across to the distributions
-mask <- dat_csv$distribution_variance == 6400 & dat_csv$button == "null" & dat_csv$distribution_mean == 222
-summary(dat_csv$drop_location[mask]) #mean == 222.2 (close to 222)
-sd(dat_csv$drop_location[mask], na.rm = TRUE)#78.7 (close to 80)
+mask <- new_data$distribution_variance == 6400 & new_data$button == "null" & new_data$distribution_mean == 222
+summary(new_data$drop_location[mask]) #mean == 222.2 (close to 222)
+sd(new_data$drop_location[mask], na.rm = TRUE)#78.7 (close to 80)
 
-mask <- dat_csv$distribution_variance == 6400 & dat_csv$button == "null" & dat_csv$distribution_mean == 578
-summary(dat_csv$drop_location[mask]) #mean == 577.7 (close to 578)
-sd(dat_csv$drop_location[mask],na.rm = TRUE)#78.6 (close to 80)
+mask <- new_data$distribution_variance == 6400 & new_data$button == "null" & new_data$distribution_mean == 578
+summary(new_data$drop_location[mask]) #mean == 577.7 (close to 578)
+sd(new_data$drop_location[mask],na.rm = TRUE)#78.6 (close to 80)
 
-mask <- dat_csv$distribution_variance == 19600 & dat_csv$button == "null" & dat_csv$distribution_mean == 278
-summary(dat_csv$drop_location[mask]) #mean == 278.5 (close to 578)
-sd(dat_csv$drop_location[mask],na.rm = TRUE)#137.4 (close to 140)
+mask <- new_data$distribution_variance == 19600 & new_data$button == "null" & new_data$distribution_mean == 278
+summary(new_data$drop_location[mask]) #mean == 278.5 (close to 578)
+sd(new_data$drop_location[mask],na.rm = TRUE)#137.5 (close to 140)
 
-mask <- dat_csv$distribution_variance == 19600 & dat_csv$button == "null" & dat_csv$distribution_mean == 522
-summary(dat_csv$drop_location[mask]) #mean == 521.5 (close to 522)
-sd(dat_csv$drop_location[mask], na.rm = TRUE)#137.4 (close to 140)
+mask <- new_data$distribution_variance == 19600 & new_data$button == "null" & new_data$distribution_mean == 522
+summary(new_data$drop_location[mask]) #mean == 521.5 (close to 522)
+sd(new_data$drop_location[mask], na.rm = TRUE)#137.5 (close to 140)
 #mean and sd working well using the force function to generate trials. 
 
 #####################################################################################
 #DATA TRANSFORMATION - flip trials around their midpoints and realign on 350 
-clearData <- subset(dat_csv, block <= 0) #subset data to focus on training trials
+clearData <- subset(new_data, block <= 0) #subset data to focus on training trials
 clearData$flippedLocation <- clearData$drop_location #set default locations
 clearData$boundary <- 350 #set default boundary
 clearData$distance_to_bound <- abs(clearData$drop_location - clearData$boundary) #set default distance to bound
@@ -206,7 +247,6 @@ clearData$flippedLocation[mask] <- clearData$boundary[mask] + clearData$distance
 
 mask <- clearData$boundary == 450
 clearData$recentredFlipLocation[mask] <- clearData$flippedLocation[mask] - 100
-
 
 #plot out 1 pp for each training block to get better idea of the information 1 pp had before each block. 
 clearDataPP1 <- subset(clearData, PID == 1)
@@ -277,12 +317,12 @@ c + geom_density(aes(fill = distribution_name), alpha = 0.4) +
 #########################################################################
 #TEST "CLOUDY DAY" TRIALS
 #accuracy - above chance? 
-unclearData <- subset(dat_csv, block > 0)
+unclearData <- subset(new_data, block > 0)
 unclearTrials <- 60
 blockNum <- 4
 
-unclearAccuracy <- (nrow(subset(unclearData, correct == 1))/(unclearTrials*blockNum*numParticipants)*100) 
-#80.5% accuracy
+unclearAccuracy <- (nrow(subset(unclearData, correct == 1))/(unclearTrials*blockNum*length(completeParticipants))*100) 
+#84.34\% accuracy
 
 #find accuracy per participant per block
 block1Cloud <- subset(unclearData, block == 1)
@@ -314,27 +354,22 @@ blockPIDwideCloudAccuracy <- rbind(block1CloudAccuracy, block2CloudAccuracy, blo
 
 blockPIDwideCloudAccuracyPlot <- ggplot(data = blockPIDwideCloudAccuracy) +
   geom_point(mapping = aes(x = PID, y = grp.mean, color = block)) +
-  labs(title="Blockwise Participant Accuracy", x="PID", y="Accuracy") 
-blockPIDwideCloudAccuracyPlot + xlim(1,numParticipants) + ylim(0, 1)
+  xlim(1,length(completeParticipants)) + ylim(0, 1) +
+  labs(title="Cloudy Day: Blockwise Participant Accuracy", x="PID", y="Accuracy", color = "Block") +
+  scale_color_gradient()
+blockPIDwideCloudAccuracyPlot 
 #overall accuracy high across participants and blocks
-#participants 10/21/58 look low across all blocks 
+#only 4 participants had values for 1 block each that fell below the cutoff point - exclusions working well. 
 
-#get an average pp accuracy across all blocks. 
-
-testAccuracy <- blockPIDwideCloudAccuracy %>%
-  group_by(PID)%>%
-  summarise(accuracyMean = mean(grp.mean))
-
-testAccuracy$quickfireAccuracy <- 
-
+#################################################################
+#TRENDS AND PATTERNS IN DATA 
 #reaction time
 unclearData$RT <- as.numeric(as.character(unclearData$delta_response_time))
 unclearData <- subset(unclearData, RT != 'NA')
-
 unclearCorrect <- subset(unclearData, correct == 1)
 unclearIncorrect <- subset(unclearData, incorrect == 1)
-avgCorrectRT <- mean(unclearCorrect$RT) #1795
-avgIncorrectRT <- mean(unclearIncorrect$RT) #1928
+avgCorrectRT <- mean(unclearCorrect$RT) #1835.2
+avgIncorrectRT <- mean(unclearIncorrect$RT) #2134.5
 
 #reaction time per participant
 unclearCorrectPID <- unclearCorrect %>% 
@@ -350,7 +385,8 @@ unclearIncorrectPID$group <- "Incorrect"
 unclearCombined <- rbind(unclearCorrectPID, unclearIncorrectPID)
 bxp <- ggboxplot(
   unclearCombined, x = "group", y = "mean", 
-  ylab = "Reaction Time (ms)", xlab = "Mean RT within participants - split by accuracy", add = "jitter"
+  ylab = "Reaction Time (ms)", xlab = "",add = "jitter",
+  title="Cloudy Day: Decision Reaction Time"
 )
 bxp
 
@@ -448,7 +484,7 @@ incorrectConfRT <- incorrectConfidence %>%
 incorrectConfRT$group <-0
 confCompareRT <- rbind(correctConfRT,incorrectConfRT)
 
-t.test(confCompareRT$grp.mean, confCompareRT$group, paired = TRUE, alternative = "two.sided")
+t.test(correctConfRT$grp.mean, incorrectConfRT$grp.mean, paired = TRUE, alternative = "two.sided")
 #difference in the reaction times for confidence reports for correct and incorrect trials
 
 
@@ -460,7 +496,9 @@ accuracyDist <- confidence %>%
   summarise(grp.mean = mean(correct))
 accuracyDist$accuracy <- accuracyDist$grp.mean
 
-a <- ggplot(data=accuracyDist, aes(distanceBin, accuracy))+ geom_point()
+a <- ggplot(data=accuracyDist, aes(distanceBin, accuracy))+ 
+  geom_point()+
+  labs(title="Accuracy by distance to bound", x="Distance Bin", y="Mean Accuracy")
 a
 
 #CONFIDENCE
@@ -469,8 +507,12 @@ confDist <- confidence %>%
   summarise(grp.mean = mean(confidence))
 confDist$confidence <- confDist$grp.mean
 
-a <- ggplot(data=confDist, aes(distanceBin, confidence))+ geom_point()
+a <- ggplot(data=confDist, aes(distanceBin, confidence))+ 
+  geom_point()+
+  labs(title="Confidence by distance to bound", x="Distance Bin", y="Mean Confidence")
 a
+
+
 
 ##################################################################################################
 #analysis time - ANOVA prep
@@ -497,6 +539,174 @@ confidencePerParticipantPerBin <- rbind(confidencePerParticipantPerBinN, confide
 confidencePPPB <- subset(confidencePerParticipantPerBin, distanceBin > 1 & distanceBin <6)
 confidencePPPB$distanceBin <- as.factor(confidencePPPB$distanceBin)
 confidencePPPB$distribution<- as.factor(confidencePPPB$distribution)
+
+
+#plot out aggregate means
+confN <- subset(confidencePPPB, distribution == "narrow")
+nBins <- confN %>%
+  group_by(distanceBin)%>%
+  summarise(binMean = mean(grp.mean))
+nBins$distribution <- "narrow"
+
+confW <- subset(confidencePPPB, distribution == "wide")
+wBins <- confW %>%
+  group_by(distanceBin)%>%
+  summarise(binMean = mean(grp.mean))
+wBins$distribution <- "wide"
+
+bins <- rbind(nBins, wBins)
+
+ggplot(bins, aes(factor(distanceBin), y=binMean, fill=distribution))+ 
+  stat_summary(fun = mean, geom = "bar", position = position_dodge(1)) + 
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(1), width=0.5) +
+  scale_fill_manual(values=c("#E69F00","#999999")) +
+  labs(title="Confidence across distance bins", x="Distance Bin", y="Mean Confidence")+
+  ylim(0,100)
+
+aggregate(binMean~distribution+distanceBin, data=bins, FUN=mean) #and check the grand means
+
+
+#run the anova
+confidenceAOV <- as.data.frame(confidencePPPB)
+
+ggplot(confidenceAOV, aes(factor(distanceBin), y=grp.mean, fill=distribution))+ 
+  geom_violin(position=position_dodge(1)) + 
+  geom_boxplot(position=position_dodge(1),width=0.1)+
+  scale_fill_manual(values=c("#E69F00","#999999"))
+
+confAOV <- aov_ez(id="PID", dv="grp.mean", data=confidenceAOV, within = c("distanceBin", "distribution"))
+confAOV
+#check the pairwise comparisons
+int_comp <- emmeans(confAOV, ~distribution | distanceBin)
+pairs(int_comp, adjust="none")
+
+#redo as within subject t-tests
+bin2N <- subset(confidenceAOV, distanceBin == 2 & distribution == "narrow")
+bin2W <- subset(confidenceAOV, distanceBin == 2 & distribution == "wide")
+t.test(bin2N$grp.mean, bin2W$grp.mean, paired = TRUE, alternative = "two.sided")
+mean(bin2N$grp.mean) #higher
+mean(bin2W$grp.mean) #lower
+
+bin3N <- subset(confidenceAOV, distanceBin == 3 & distribution == "narrow")
+bin3W <- subset(confidenceAOV, distanceBin == 3 & distribution == "wide")
+t.test(bin3N$grp.mean, bin3W$grp.mean, paired = TRUE, alternative = "two.sided")
+mean(bin3N$grp.mean) #lower
+mean(bin3W$grp.mean) #higher
+
+bin4N <- subset(confidenceAOV, distanceBin == 4 & distribution == "narrow")
+bin4W <- subset(confidenceAOV, distanceBin == 4 & distribution == "wide")
+t.test(bin4N$grp.mean, bin4W$grp.mean, paired = TRUE, alternative = "two.sided") #sig
+mean(bin4N$grp.mean) #lower
+mean(bin4W$grp.mean) #higher
+
+bin5N <- subset(confidenceAOV, distanceBin == 5 & distribution == "narrow")
+bin5W <- subset(confidenceAOV, distanceBin == 5 & distribution == "wide")
+t.test(bin5N$grp.mean, bin5W$grp.mean, paired = TRUE, alternative = "two.sided") #sig
+mean(bin5N$grp.mean) #lower
+mean(bin5W$grp.mean) #higher
+
+############################################################################
+#ERROR TRIALS 
+##check errors in different bins, how many bins can we plausible analyse
+
+errorBin2 <- subset(confidence, distanceBin ==2)
+errorsPID <- errorBin2 %>%
+  group_by(PID)%>%
+  summarise(errorCount2 = sum(incorrect))
+
+errorBin3 <- subset(confidence, distanceBin ==3)
+errorBin3PID <- errorBin3 %>%
+  group_by(PID)%>%
+  summarise(errorCount3 = sum(incorrect))
+
+errorBin4 <- subset(confidence, distanceBin ==4)
+errorBin4PID <- errorBin4 %>%
+  group_by(PID)%>%
+  summarise(errorCount4 = sum(incorrect))
+
+errorBin5 <- subset(confidence, distanceBin ==5)
+errorBin5PID <- errorBin5 %>%
+  group_by(PID)%>%
+  summarise(errorCount5 = sum(incorrect))
+
+
+errorsPID$errorCount3 <- errorBin3PID$errorCount3
+errorsPID$errorCount4 <- errorBin4PID$errorCount4
+errorsPID$errorCount5 <- errorBin5PID$errorCount5
+
+errorsPID #this is a table of frequency of errors per distance bin (2-5) per participant
+#bins 2 and 3 have okay error rates - bins 4 and 5 are negligible for many participants.
+
+errorTrials <- subset(incorrectConfidence, distanceBin == 2 | distanceBin == 3) #pull out relevant data
+errorConf <- errorTrials %>%
+  group_by(PID)%>%
+  summarise(meanConf = mean(confidence)) #what are we looking for? 
+
+
+############################################################################
+#BIN 1 and BIN 6 ANALYSIS
+#BIN1: look at bin1 - when they thought it was narrow versus when they thought it was wide
+bin1 <- subset(confidence, distanceBin == 1)
+
+#first set up a block type variable (0/1) to tell us whether narrow is a bomb or wide is
+#blocktype = 0, narrow = bomb (should zap 1), blocktype = 1, wide is bomb (should zap 1)
+mask <- bin1$stimulus == "orange1" & bin1$distribution_name == "wide" | 
+  bin1$stimulus == "blue1" & bin1$distribution_name == "narrow"
+bin1$blocktype[mask] <- 0 #when zap1 think it's narrow, when retrieve0 think it's wide
+
+narrowResponseZap <- subset(bin1, blocktype == 0 & button == 1)
+wideResponseRetrieve <- subset(bin1, blocktype == 0 & button == 0)
+
+mask <- bin1$stimulus == "orange1" & bin1$distribution_name == "narrow" | 
+  bin1$stimulus == "blue1" & bin1$distribution_name == "wide"
+bin1$blocktype[mask] <- 1 #when zap1 think it's wide, when retrieve0 think it's narrow
+
+narrowResponseRetrieve <- subset(bin1, blocktype == 1 & button == 0)
+wideResponseZap <- subset(bin1, blocktype == 1 & button == 1)
+
+wideResponse <- rbind(wideResponseRetrieve, wideResponseZap)
+narrowResponse <- rbind(narrowResponseRetrieve, narrowResponseRetrieve)
+
+wideConf <- wideResponse %>%
+  group_by(PID)%>%
+  summarise(confWide = mean(confidence))
+
+narrowConf <- narrowResponse %>%
+  group_by(PID)%>%
+  summarise(confNarrow = mean(confidence))
+#some people haven't thoguht it was a narrow trial at all in this bin
+extra <- c(7,15,16,22,24,29,47,52,55)
+extra <-as.data.frame(extra)
+extra$conf <- c("NA","NA","NA","NA","NA","NA","NA","NA","NA")
+extra <- extra %>% 
+  rename(
+    PID = extra,
+    confNarrow = conf)
+narrow <- rbind(narrowConf, extra)
+narrowDF <- arrange(narrow, PID)
+narrowDF$confNarrow <- as.numeric(narrowDF$confNarrow)
+
+t.test(wideConf$confWide, narrowDF$confNarrow, paired = TRUE, alternative = "two.sided") #not sig 
+#no difference in pp who used both wide and narrow responses in bin 1 (43/52) 
+#but 9 didn't respond as though it was narrow ever in bin 1 - so how to look at that?  
+
+#BIN 6: look at only correct trials in bin 6 - diffs for wise and narrow?
+bin6 <- subset(confidence, distanceBin == 6  & correct ==1)
+
+bin6W <- subset(bin6, distribution_name == "wide")
+mean(bin6W$confidence) #84.7
+bin6_conf <- bin6W %>%
+  group_by(PID)%>%
+  summarise(meanConfW = mean(confidence))
+
+bin6N <- subset(bin6, distribution_name == "narrow")
+mean(bin6N$confidence) #84.1
+bin6_N_conf <- bin6N %>%
+  group_by(PID)%>%
+  summarise(meanConfN = mean(confidence))
+bin6_conf$meanConfN <- bin6_N_conf$meanConfN
+
+t.test(bin6_conf$meanConfN, bin6_conf$meanConfW, paired = TRUE, alternative = "two.sided") #no difference
 
 ############################################################################
 #create an excel spreadsheet for Nick to doublecheck values
@@ -558,36 +768,3 @@ library(writexl)
 write_xlsx(confidence_SPSS,"C:/Users/saraha/Desktop/Pilot_Data_V2.1/confidence_SPSS.xlsx")
 
 ############################################################################
-#plot out aggregate means
-confN <- subset(confidencePPPB, distribution == "narrow")
-nBins <- confN %>%
-  group_by(distanceBin)%>%
-  summarise(binMean = mean(grp.mean))
-nBins$distribution <- "narrow"
-
-confW <- subset(confidencePPPB, distribution == "wide")
-wBins <- confW %>%
-  group_by(distanceBin)%>%
-  summarise(binMean = mean(grp.mean))
-wBins$distribution <- "wide"
-
-bins <- rbind(nBins, wBins)
-
-ggplot(bins, aes(factor(distanceBin), y=binMean, fill=distribution))+ 
-  stat_summary(fun = mean, geom = "bar", position = position_dodge(1)) + 
-  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(1), width=0.5) +
-  scale_fill_manual(values=c("#E69F00","#999999")) +
-  labs(title="Confidence across distance bins", x="Distance Bin", y="Mean Confidence")+
-  ylim(0,100)
-
-aggregate(binMean~distribution+distanceBin, data=bins, FUN=mean) #and check the grand means
-
-#run the anova
-confidenceAOV <- as.data.frame(confidencePPPB)
-confAOV <- aov_ez(id="PID", dv="grp.mean", data=confidenceAOV, within = c("distanceBin", "distribution"))
-confAOV
-#check the pairwise comparisons
-int_comp <- emmeans(confAOV, ~distribution | distanceBin)
-pairs(int_comp,adjust="none")
-
-
