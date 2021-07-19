@@ -30,7 +30,7 @@ library(afex) #running ANOVA
 
 ###################################################
 #DATA LOADING, CLEANING, AND TIDYING
-mydir = setwd("C:/Users/saraha/Desktop/ConfCats/ConfCats_Version2/Data_V2.1")
+mydir = setwd("C:/Users/saraha/Desktop/ConfCats/ConfCats_Version2/Data_V2.1/data")
 myfiles = list.files(path=mydir, pattern="zapBox_v0.2.1_*", full.names=TRUE) #pull all files
 dat_csv = ldply(myfiles, read_csv) #load in data
 
@@ -126,9 +126,9 @@ unclearData <- subset(dat_csv, block > 0)
 PIDwiseCloudy <- unclearData %>% 
   group_by(PID) %>%
   summarise(meanCloud = mean(correct))
+
 averageCloud <- mean(PIDwiseCloudy$meanCloud) #81.1
 sdCloud <- sd(PIDwiseCloudy$meanCloud) #12.5
-
 cutoffLow <- averageCloud - 2*sdCloud
 cutoffHigh <- averageCloud + 2*sdCloud
 excludeCloud <- subset(PIDwiseCloudy, meanCloud < cutoffLow | meanCloud > cutoffHigh) #potential exclusion list
@@ -156,13 +156,13 @@ timeout <- subset(new_data, time_elapsed > 7000000) # just 1 pp, pp25 who is run
 #QUICKFIRE ROUNDS
 #look at quickfire rounds for accuracy rates(did the participants learn a pairing) 
 quickfireData <- subset(new_data, trial_type == 'jspsych-quickfire') #1200 trials across 60 pp
-trials <- c(1:1200)
+trials <- c(1:length(quickfireData$button))
 for (i in trials){
   if(quickfireData$button[i] == "null"){
     quickfireData$correct[i] = 0
     quickfireData$incorrect[i] =1 
-  }} #reset NA values
-
+  } #reset NA values
+}
 #feedback = images/coins.png, or images/bomb.png; button 0 = Retrieve, button 1 = Zap
 correctCoins <- subset(quickfireData, quickfireData$feedback == 'images/coins.png' & quickfireData$button == 0)
 correctBombs <- subset(quickfireData, quickfireData$feedback == 'images/bomb.png' & quickfireData$button == 1)
@@ -170,7 +170,6 @@ correctQuickfire <- rbind(correctBombs, correctCoins)
 quickfireTrials <- 20
 quickfireAccuracy <- ((nrow(correctQuickfire)/(quickfireTrials*length(completeParticipants))*100)) 
 # mean accuracy in quickfire is 93.5%
-
 
 #per participant?
 PIDwiseCorrectQuickfire <- quickfireData %>% 
@@ -229,7 +228,6 @@ clearData <- subset(new_data, block <= 0) #subset data to focus on training tria
 clearData$flippedLocation <- clearData$drop_location #set default locations
 clearData$boundary <- 350 #set default boundary
 clearData$distance_to_bound <- abs(clearData$drop_location - clearData$boundary) #set default distance to bound
-clearData$recentredFlipLocation <- clearData$flippedLocation #set default recentred location
 
 mask <- clearData$distribution_name == 'wide' & clearData$distribution_mean == 278 & !is.na(clearData$drop_location)
 clearData$boundary[mask] <- 450
@@ -245,28 +243,9 @@ clearData$flippedLocation[mask] <- clearData$boundary[mask] - clearData$distance
 mask <- clearData$distribution_name == 'narrow' & clearData$distribution_mean == 578 & !is.na(clearData$drop_location) & clearData$drop_location < 450
 clearData$flippedLocation[mask] <- clearData$boundary[mask] + clearData$distance_to_bound[mask]
 
+clearData$recentredFlipLocation <- clearData$flippedLocation #set default recentred location
 mask <- clearData$boundary == 450
 clearData$recentredFlipLocation[mask] <- clearData$flippedLocation[mask] - 100
-
-#plot out 1 pp for each training block to get better idea of the information 1 pp had before each block. 
-clearDataPP1 <- subset(clearData, PID == 1)
-ppClearLocations  <- ggplot(data=clearDataPP1, aes(drop_location, fill= distribution_name)) + 
-  geom_histogram(col=I("navy")) +
-  labs(title="Histogram for Training Locations", x="Drop location", y="Frequency") +
-  facet_wrap( ~ block)
-ppClearLocations #original values
-
-ppClearLocations  <- ggplot(data=clearDataPP1, aes(flippedLocation, fill= distribution_name)) + 
-  geom_histogram(col=I("navy")) +
-  labs(title="Histogram for Training Locations", x="Flipped location", y="Frequency") +
-  facet_wrap( ~ block)
-ppClearLocations #flipped around midlines
-
-ppClearLocations  <- ggplot(data=clearDataPP1, aes(recentredFlipLocation, fill= distribution_name)) + 
-  geom_histogram(col=I("navy")) +
-  labs(title="Histogram for Training Locations", x="Flipped (recentred) location", y="Frequency") +
-  facet_wrap( ~ block)
-ppClearLocations #recentred on 350
 
 #density plots
 a <- ggplot(data=clearData, aes(recentredFlipLocation))
@@ -311,7 +290,7 @@ c + geom_density(aes(fill = distribution_name), alpha = 0.4) +
              data = mu, linetype = "dashed") +
   scale_color_manual(values = c("#868686FF", "#EFC000FF"))+
   scale_fill_manual(values = c("#868686FF", "#EFC000FF")) +
-  labs(title="Density Plot for (flipped) Training Locations", x="Drop location (flipped)", y="Density")
+  labs(title="Density Plot for (recentered flipped) Training Locations", x="Drop location (recentred flipped)", y="Density")
 # means and midline looks spot on
 
 #########################################################################
@@ -407,8 +386,32 @@ breaks <- quantile(confidence$confidence, seq(0, 1, by = 0.2))
 confidence$binnedConfidence <- cut(confidence$confidence, breaks, include.lowest = TRUE, 
                                    labels = c("1", "2", "3", "4", "5"))
 
+#DATA TRANSFORMATION - flip trials around their midpoints and realign on 350 
+confidence$flippedLocation <- confidence$drop_location #set default locations
+confidence$boundary <- 350 #set default boundary
+confidence$distance_to_bound <- abs(confidence$drop_location - confidence$boundary) #set default distance to bound
+
+mask <- confidence$distribution_name == 'wide' & confidence$distribution_mean == 278 & !is.na(confidence$drop_location)
+confidence$boundary[mask] <- 450
+confidence$distance_to_bound[mask] <- abs(confidence$drop_location[mask] - confidence$boundary[mask])
+confidence$flippedLocation[mask] <- confidence$boundary[mask] + confidence$distance_to_bound[mask]
+mask <- confidence$distribution_name == 'wide' & confidence$distribution_mean == 278 & !is.na(confidence$drop_location) & confidence$drop_location > 450
+confidence$flippedLocation[mask] <- confidence$boundary[mask] - confidence$distance_to_bound[mask]
+
+mask <- confidence$distribution_name == 'narrow' & confidence$distribution_mean == 578 & !is.na(confidence$drop_location)
+confidence$boundary[mask] <- 450
+confidence$distance_to_bound[mask] <- abs(confidence$drop_location[mask] - confidence$boundary[mask])
+confidence$flippedLocation[mask] <- confidence$boundary[mask] - confidence$distance_to_bound[mask]
+mask <- confidence$distribution_name == 'narrow' & confidence$distribution_mean == 578 & !is.na(confidence$drop_location) & confidence$drop_location < 450
+confidence$flippedLocation[mask] <- confidence$boundary[mask] + confidence$distance_to_bound[mask]
+
+confidence$recentredFlipLocation <- confidence$flippedLocation #set default recentred location
+mask <- confidence$boundary == 450
+confidence$recentredFlipLocation[mask] <- confidence$flippedLocation[mask] - 100
+
+
 #bin the distance according to the way it was generated in the experiment
-confidence$rawLocation <- confidence$drop_location
+confidence$rawLocation <- confidence$recentredFlipLocation
 midline1 <- 350
 breaks <- c(0, (midline1 - 180), (midline1 - 140), (midline1 - 100), (midline1 - 60), (midline1 - 20), 
             (midline1 + 20), (midline1 + 60), (midline1 +100), (midline1 + 140), (midline1 + 180), 800)
@@ -484,7 +487,7 @@ incorrectConfRT <- incorrectConfidence %>%
 incorrectConfRT$group <-0
 confCompareRT <- rbind(correctConfRT,incorrectConfRT)
 
-t.test(correctConfRT$grp.mean, incorrectConfRT$grp.mean, paired = TRUE, alternative = "two.sided")
+t.test(correctConfRT$grp.mean, incorrectConfRT$grp.mean, paired = TRUE, alternative = "two.sided") #not sig 0.1
 #difference in the reaction times for confidence reports for correct and incorrect trials
 
 
@@ -511,7 +514,6 @@ a <- ggplot(data=confDist, aes(distanceBin, confidence))+
   geom_point()+
   labs(title="Confidence by distance to bound", x="Distance Bin", y="Mean Confidence")
 a
-
 
 
 ##################################################################################################
@@ -565,7 +567,6 @@ ggplot(bins, aes(factor(distanceBin), y=binMean, fill=distribution))+
 
 aggregate(binMean~distribution+distanceBin, data=bins, FUN=mean) #and check the grand means
 
-
 #run the anova
 confidenceAOV <- as.data.frame(confidencePPPB)
 
@@ -584,8 +585,8 @@ pairs(int_comp, adjust="none")
 bin2N <- subset(confidenceAOV, distanceBin == 2 & distribution == "narrow")
 bin2W <- subset(confidenceAOV, distanceBin == 2 & distribution == "wide")
 t.test(bin2N$grp.mean, bin2W$grp.mean, paired = TRUE, alternative = "two.sided")
-mean(bin2N$grp.mean) #higher
-mean(bin2W$grp.mean) #lower
+mean(bin2N$grp.mean) #lower
+mean(bin2W$grp.mean) #higher
 
 bin3N <- subset(confidenceAOV, distanceBin == 3 & distribution == "narrow")
 bin3W <- subset(confidenceAOV, distanceBin == 3 & distribution == "wide")
@@ -604,11 +605,9 @@ bin5W <- subset(confidenceAOV, distanceBin == 5 & distribution == "wide")
 t.test(bin5N$grp.mean, bin5W$grp.mean, paired = TRUE, alternative = "two.sided") #sig
 mean(bin5N$grp.mean) #lower
 mean(bin5W$grp.mean) #higher
-
 ############################################################################
 #ERROR TRIALS 
 ##check errors in different bins, how many bins can we plausible analyse
-
 errorBin2 <- subset(confidence, distanceBin ==2)
 errorsPID <- errorBin2 %>%
   group_by(PID)%>%
@@ -629,7 +628,6 @@ errorBin5PID <- errorBin5 %>%
   group_by(PID)%>%
   summarise(errorCount5 = sum(incorrect))
 
-
 errorsPID$errorCount3 <- errorBin3PID$errorCount3
 errorsPID$errorCount4 <- errorBin4PID$errorCount4
 errorsPID$errorCount5 <- errorBin5PID$errorCount5
@@ -637,12 +635,105 @@ errorsPID$errorCount5 <- errorBin5PID$errorCount5
 errorsPID #this is a table of frequency of errors per distance bin (2-5) per participant
 #bins 2 and 3 have okay error rates - bins 4 and 5 are negligible for many participants.
 
-errorTrials <- subset(incorrectConfidence, distanceBin == 2 | distanceBin == 3) #pull out relevant data
-errorConf <- errorTrials %>%
+#in bins 2 and 3 where are the errors coming from = wide or narrow trials?
+errors2N <- subset(errorBin2, distribution_name == "narrow")
+errorBinNW <- errors2N %>%
   group_by(PID)%>%
-  summarise(meanConf = mean(confidence)) #what are we looking for? 
+  summarise(errorCount2N = sum(incorrect))
 
+errors2W <- subset(errorBin2, distribution_name == "wide")
+errorBin2Wide <- errors2W %>%
+  group_by(PID)%>%
+  summarise(errorCount2W = sum(incorrect))
 
+errors3N <- subset(errorBin3, distribution_name == "narrow")
+errorBin3Narrow <- errors3N %>%
+  group_by(PID)%>%
+  summarise(errorCount3N = sum(incorrect))
+
+errors3W <- subset(errorBin3, distribution_name == "wide")
+errorBin3Wide <- errors3W %>%
+  group_by(PID)%>%
+  summarise(errorCount3W = sum(incorrect))
+
+errorBinNW$errorCount2W <- errorBin2Wide$errorCount2W
+errorBinNW$errorCount3N <- errorBin3Narrow$errorCount3N
+errorBinNW$errorCount3W <- errorBin3Wide$errorCount3W
+
+errorBinNW #these are the error found in bin 2 and 3 split by distribution
+
+t.test(errorBinNW$errorCount2N, errorBinNW$errorCount2W, paired = TRUE, alternative = "two.sided") #sig
+mean(errorBinNW$errorCount2N)#3.2 Narrow
+mean(errorBinNW$errorCount2W)#5.8  Wide
+t.test(errorBinNW$errorCount3N, errorBinNW$errorCount3W, paired = TRUE, alternative = "two.sided") #sig
+mean(errorBinNW$errorCount3N) #2.8 Narrow
+mean(errorBinNW$errorCount3W) #4.8 Wide
+
+#in both bin 2 and 3 there is a difference in where the errors are emerging from with more errors 
+#on wide trials than narrow (thinking it's a narrow trial when it's wide)
+
+#confidence on the trials in which they make errors -focus on bin2 (maybe bin3?)
+errorBinConf <- subset(errorBin2, incorrect == 1)
+mean(errorBinConf$confidence) #46.99
+
+errorBinConf1 <- errorBinConf %>%
+  group_by(PID)%>%
+  summarise(meanConf = mean(confidence))
+#just pp 48 made no error in bin1 
+extra <- c(48)
+extra <-as.data.frame(extra)
+extra$meanConf <- c("NA")
+extra <- extra %>% 
+  rename(
+    PID = extra)
+errorBin <- rbind(errorBinConf1, extra)
+errorBin <- arrange(errorBin, PID)
+errorBin$meanConf <- as.numeric(errorBin$meanConf)
+
+correctBinConf <- subset(errorBin2, correct ==1)
+mean(correctBinConf$confidence) #65.16
+
+errorBinConf2 <- correctBinConf %>%
+  group_by(PID)%>%
+  summarise(meanConf = mean(confidence))
+
+t.test(errorBin$meanConf, errorBinConf2$meanConf, paired = TRUE, alternative = "two.sided") 
+#sig difference in the confidence in the correct and error trials in this bin
+
+#where are the errors coming from - wide or narrow? 
+errorWide <- subset(errorBinConf, distribution_name == "wide") #306
+mean(errorWide$confidence) #46.8
+errorNarrow <- subset(errorBinConf, distribution_name == "narrow") #167
+mean(errorNarrow$confidence) #47.3
+
+errorBinWide <- errorWide %>%
+  group_by(PID)%>%
+  summarise(meanConf = mean(confidence)) #only 47 of 52 have wide errors in bin 2
+extra <- c(1, 15, 24, 48, 54)
+extra <-as.data.frame(extra)
+extra$meanConf <- c("NA")
+extra <- extra %>% 
+  rename(
+    PID = extra)
+errorBinWide <- rbind(errorBinWide, extra)
+errorBinWide <- arrange(errorBinWide, PID)
+errorBinWide$meanConf <- as.numeric(errorBinWide$meanConf)
+
+errorBinNarrow <- errorNarrow %>%
+  group_by(PID)%>%
+  summarise(meanConf = mean(confidence)) #only 40 have made narrow errors in bin 2
+extra <- c(2, 6, 8, 9, 12, 17, 20, 23, 37, 38, 48, 49)
+extra <-as.data.frame(extra)
+extra$meanConf <- c("NA")
+extra <- extra %>% 
+  rename(
+    PID = extra)
+errorBinNarrow <- rbind(errorBinNarrow, extra)
+errorBinNarrow <- arrange(errorBinNarrow, PID)
+errorBinNarrow$meanConf <- as.numeric(errorBinNarrow$meanConf)
+
+t.test(errorBinNarrow$meanConf, errorBinWide$meanConf, paired = TRUE, alternative = "two.sided") #not sig diff
+#many pbins empty so only running on 35 people - not realiable at all. 
 ############################################################################
 #BIN 1 and BIN 6 ANALYSIS
 #BIN1: look at bin1 - when they thought it was narrow versus when they thought it was wide
@@ -665,19 +756,58 @@ narrowResponseRetrieve <- subset(bin1, blocktype == 1 & button == 0)
 wideResponseZap <- subset(bin1, blocktype == 1 & button == 1)
 
 wideResponse <- rbind(wideResponseRetrieve, wideResponseZap)
-narrowResponse <- rbind(narrowResponseRetrieve, narrowResponseRetrieve)
+narrowResponse <- rbind(narrowResponseRetrieve, narrowResponseZap)
 
 wideConf <- wideResponse %>%
-  group_by(PID)%>%
-  summarise(confWide = mean(confidence))
+  group_by(PID)%>% 
+  summarise(conf = mean(confidence))
+wideConf$distribution <- "wide"
 
 narrowConf <- narrowResponse %>%
   group_by(PID)%>%
-  summarise(confNarrow = mean(confidence))
-#some people haven't thoguht it was a narrow trial at all in this bin
-extra <- c(7,15,16,22,24,29,47,52,55)
+  summarise(conf = mean(confidence))
+#4 pp never thought it was a narrow trial at all in this bin
+extra <- c(7, 15, 24, 54)
 extra <-as.data.frame(extra)
-extra$conf <- c("NA","NA","NA","NA","NA","NA","NA","NA","NA")
+extra$conf <- c("NA", "NA", "NA", "NA")
+extra <- extra %>% 
+  rename(
+    PID = extra,
+    conf = conf)
+narrow <- rbind(narrowConf, extra)
+narrowDF <- arrange(narrow, PID)
+narrowDF$conf <- as.numeric(narrowDF$conf)
+narrowDF$distribution <- "narrow"
+
+#plot out grand means
+bin1s <- rbind(narrowDF, wideConf)
+ggplot(bin1s, aes(factor(distribution), y=conf))+ 
+  stat_summary(fun = mean, geom = "bar", position = position_dodge(1)) + 
+  scale_fill_manual(values=c("#E69F00","#999999")) +
+  labs(title="Confidence in central bin", x="Distribution", y="Mean Confidence")+
+  ylim(0,100)
+
+means <- bin1s %>%
+  group_by(PID)%>%
+  summarise(conf = mean(confidence))
+
+t.test(wideConf$conf, narrowDF$conf, paired = TRUE, alternative = "two.sided") #DIFF
+#difference in confidence in bin1 for wide and narrow confidence reports
+#more confident in wide responses in bin1 than narrow response (in line with understnading)
+#but 4 didn't respond as though it was narrow ever in bin 1
+
+#look medians instead of means to make sure outliers aren't pushing effects. 
+wideConf <- wideResponse %>%
+  group_by(PID)%>% 
+  summarise(confWide = median(confidence))
+
+narrowConf <- narrowResponse %>%
+  group_by(PID)%>%
+  summarise(confNarrow = median(confidence))
+#some people haven't thought it was a narrow trial at all in this bin
+extra <- c(7, 15, 24, 54)
+extra <-as.data.frame(extra)
+extra$conf <- c("NA", "NA", "NA", "NA")
 extra <- extra %>% 
   rename(
     PID = extra,
@@ -686,11 +816,13 @@ narrow <- rbind(narrowConf, extra)
 narrowDF <- arrange(narrow, PID)
 narrowDF$confNarrow <- as.numeric(narrowDF$confNarrow)
 
-t.test(wideConf$confWide, narrowDF$confNarrow, paired = TRUE, alternative = "two.sided") #not sig 
-#no difference in pp who used both wide and narrow responses in bin 1 (43/52) 
-#but 9 didn't respond as though it was narrow ever in bin 1 - so how to look at that?  
+t.test(wideConf$confWide, narrowDF$confNarrow, paired = TRUE, alternative = "two.sided") #also sig 
+mean(wideConf$confWide) #65.88
+mean(narrowConf$confNarrow) #51.6
+#less confidence in bin1 when responding narrow than wide
 
-#BIN 6: look at only correct trials in bin 6 - diffs for wise and narrow?
+######################################################################
+#BIN 6: look at only correct trials in bin 6 - diffs for wide and narrow?
 bin6 <- subset(confidence, distanceBin == 6  & correct ==1)
 
 bin6W <- subset(bin6, distribution_name == "wide")
@@ -706,7 +838,99 @@ bin6_N_conf <- bin6N %>%
   summarise(meanConfN = mean(confidence))
 bin6_conf$meanConfN <- bin6_N_conf$meanConfN
 
-t.test(bin6_conf$meanConfN, bin6_conf$meanConfW, paired = TRUE, alternative = "two.sided") #no difference
+t.test(bin6_conf$meanConfN, bin6_conf$meanConfW, paired = TRUE, alternative = "two.sided") #sig different
+mean(bin6_conf$meanConfN) #76.39
+mean(bin6_conf$meanConfW) #86.4
+
+#look medians instead of means to make sure outliers aren't pushing effects. 
+bin6_conf <- bin6W %>%
+  group_by(PID)%>%
+  summarise(medConfW = median(confidence))
+
+bin6_N_conf <- bin6N %>%
+  group_by(PID)%>%
+  summarise(medConfN = median(confidence))
+bin6_conf$medConfN <- bin6_N_conf$medConfN
+t.test(bin6_conf$medConfN, bin6_conf$medConfW, paired = TRUE, alternative = "two.sided") #sig difference
+
+############################################################################
+#per PID - for 11 bins, what is the likelihood of judging wide or narrow 
+#use $binnedLocation, bin 6 is middle bin (flipped data so narrow on left, wide on right)
+
+#when wide is good versus bad how are they interpreting things (midbin as being wide on avg?)
+#(take responses to infer judgements)
+mask <- confidence$stimulus == "orange1" & confidence$distribution_name == "wide" | 
+  confidence$stimulus == "blue1" & confidence$distribution_name == "narrow"
+confidence$blocktype[mask] <- 0 #when zap1 think it's narrow, when retrieve0 think it's wide
+narrowResponseZap <- subset(confidence, blocktype == 0 & button == 1)
+wideResponseRetrieve <- subset(confidence, blocktype == 0 & button == 0)
+
+mask <- confidence$stimulus == "orange1" & confidence$distribution_name == "narrow" | 
+  confidence$stimulus == "blue1" & confidence$distribution_name == "wide"
+confidence$blocktype[mask] <- 1 #when zap1 think it's wide, when retrieve0 think it's narrow
+narrowResponseRetrieve <- subset(confidence, blocktype == 1 & button == 0)
+wideResponseZap <- subset(confidence, blocktype == 1 & button == 1)
+
+wideResponse <- rbind(wideResponseRetrieve, wideResponseZap)
+wideResponse$Response <- "wide"
+narrowResponse <- rbind(narrowResponseRetrieve, narrowResponseZap)
+narrowResponse$Response <- "narrow"
+
+Response <- rbind(wideResponse, narrowResponse) #this is the response based data to work with
+ggplot(Response, aes(factor(binnedLocation), y=confidence, fill=distribution_name))+ 
+  stat_summary(fun = mean, geom = "bar", position = position_dodge(1)) + 
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(1), width=0.5) +
+  scale_fill_manual(values=c("#E69F00","#999999")) +
+  labs(title="Confidence across distance bins", x="Distance Bin", y="Mean Confidence")+
+  ylim(0,100)
+
+#looking at correct responses only (across all 11 bins)
+ResponseCorrect <- subset(Response, correct == 1) 
+ggplot(ResponseCorrect, aes(factor(binnedLocation), y=confidence, fill=distribution_name))+ 
+  stat_summary(fun = mean, geom = "bar", position = position_dodge(1)) + 
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(1), width=0.5) +
+  scale_fill_manual(values=c("#E69F00","#999999")) +
+  labs(title="Confidence across distance bins", x="Distance Bin", y="Mean Confidence")+
+  ylim(0,100)
+
+#where are they responding more as though it is narrow or wide? 
+hist(Response$binnedLocation, Response$Respons
+#when wide is good versus bad how are they interpreting things (midbin as being wide on avg?)
+#blocktype 1 wide is bad, block type 0 wide is good
+
+#average accuracy split by distribution across bins - think about 11 bins? 
+
+
+#confidence across the 11 bins
+
+
+
+aggregate(binMean~distribution+distanceBin, data=bins, FUN=mean) #and check the grand means
+
+
+wide_bin_conf <- wideResponse %>%
+  group_by(binnedLocation)%>%
+  summarise(confidence = mean(confidence))
+wide_bin_conf$distribution <- "wide"
+
+narrow_bin_conf <- narrowResponse %>%
+  group_by(binnedLocation)%>%
+  summarise(confidence = mean(confidence))
+narrow_bin_conf$distribution <- "narrow"
+
+bin_conf <- rbind(wide_bin_conf, narrow_bin_conf)
+
+ggplot(bin_conf, aes(factor(binnedLocation), y=confidence, fill=distribution))+ 
+  stat_summary(fun = mean, geom = "bar", position = position_dodge(1)) + 
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(1), width=0.5) +
+  scale_fill_manual(values=c("#E69F00","#999999")) +
+  labs(title="Confidence across distance bins", x="Distance Bin", y="Mean Confidence")+
+  ylim(0,100)
+
+
+
+
+
 
 ############################################################################
 #create an excel spreadsheet for Nick to doublecheck values
