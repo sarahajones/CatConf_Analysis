@@ -30,6 +30,7 @@ library(afex) #running ANOVA
 library(pracma) #fitting a sigmoid
 
 ###################################################
+#this is a change
 #DATA LOADING, CLEANING, AND TIDYING
 mydir = setwd("C:/Users/A-J/Desktop/Data_V2.1")
 myfiles = list.files(path=mydir, pattern="zapBox_v0.2.1_*", full.names=TRUE) #pull all files
