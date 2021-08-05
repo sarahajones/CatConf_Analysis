@@ -549,7 +549,7 @@ confidencePerParticipantPerBinW <- correctConfW  %>%
 confidencePerParticipantPerBinW$distribution <- "wide"
 
 confidencePerParticipantPerBin <- rbind(confidencePerParticipantPerBinN, confidencePerParticipantPerBinW)
-  
+
 confidencePPPB <- subset(confidencePerParticipantPerBin, distanceBin > 1 & distanceBin <6)
 confidencePPPB$distanceBin <- as.factor(confidencePPPB$distanceBin)
 confidencePPPB$distribution<- as.factor(confidencePPPB$distribution)
@@ -963,7 +963,7 @@ percentResponseN <- Response %>%
 percentResponseN$condition <- "narrow"
 
 percentResponse <- rbind(percentResponseW, percentResponseN)
- 
+
 ggplot(percentResponse, aes(y=percentResp, x=binnedLocation, fill = condition)) + 
   geom_col()
 ggplot(percentResponse, aes(binnedLocation,y=percentResp, fill = condition)) +
@@ -1023,7 +1023,7 @@ sigmoid = function(params, x) {
 xlist <- 0:800
 y2 <- sigmoid(params,xlist)
 plot(y2,type="l") 
- 
+
 #find point pp where the sigmoid crosses 50%
 halfX <- (log(params[1]/(0.5))/ -params[2]) + params[3]
 #halfX is where this corresponds to on the x axis
@@ -1056,16 +1056,16 @@ for (i in PIDcount){
   dataOfInterest <- subset(avgLocation, PID == index)
   x <- dataOfInterest$avgLocation
   y <- dataOfInterest$wideResponse
-
+  
   # fitting code
   df <- data.frame(x = x,
-                 y = y)
+                   y = y)
   
   fitmodel <- nls(y ~ I(a/(1 + exp(-b * (x-c)))), data = df, start=list(a=a_start, b=b_start, c=c_start)) 
   params[,i] <- coef(fitmodel)
   y2[,i] <- sigmoid(params[,i],xlist)
   plot(y2[,i],type="l", xlab = index)
-
+  
   #find point pp where the sigmoid crosses 50%
   halfX[,i] <- (log(params[1,i]/(0.5))/ -params[2,i]) + params[3,i]
   #halfX is where this corresponds to on the x axis
