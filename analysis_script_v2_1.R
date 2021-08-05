@@ -31,7 +31,7 @@ library(pracma) #fitting a sigmoid
 
 ###################################################
 #DATA LOADING, CLEANING, AND TIDYING
-mydir = setwd("C:/Users/A-J/Desktop/Data_V2.1")
+mydir = setwd("C:/Users/saraha/Desktop/ConfCats/ConfCats_Version2/Data_V2.1/data")
 myfiles = list.files(path=mydir, pattern="zapBox_v0.2.1_*", full.names=TRUE) #pull all files
 dat_csv = ldply(myfiles, read_csv) #load in data
 
@@ -1006,52 +1006,67 @@ y <- avgLocation$wideResponse
 # fitting code
 df <- data.frame(x = x,
                  y = y)
-a_start <- 1 #lupper
-b_start <- 0.1 #slope
-c_start <- 0  #lower
-d_start <- 350 #mid point
+a_start <- 1 #upper asymptote
+b_start <- 0.1 #growth rate
+c_start <- 550 #time of maximum growth
+d_start <- 0.01 #start point not fixed to zero
 
-
-fitmodel <- nls(y ~ I( c + ((a-c)/(1 + exp((-b/1) * (x-d))))), data = df, start=list(a=a_start, b=b_start, c=c_start, d=d_start)) 
+fitmodel <- nls(y ~ I(d + (a/(1 + exp(-b * (x-c))))), data = df, start=list(a=a_start, b=b_start, c=c_start, d=d_start)) 
 params=coef(fitmodel)
 
 # function needed for visualization purposes
 sigmoid = function(params, x) {
-  params[3] + ((params[1]-params[3]) / (1 + exp((-params[2]/1) * (x - params[4]))))
+  (params[1] / (1 + exp(-params[2] * (x - params[3]))))
 }
 xlist <- 0:800
 y2 <- sigmoid(params,xlist)
 plot(y2,type="l") 
  
+#find point pp where the sigmoid crosses 50%
+halfX <- (log(params[1]/(0.5))/ -params[2]) + params[3]
+#halfX is where this corresponds to on the x axis
 
 ##########################################################
 #now fit a sigmoid per person 
-#3pp not fitting the data right now - update the start values? 
-avgLocation <- subset(avgLocation, PID != 53)
+a_start <- 1 #upper asymptote
+b_start <- 0.1 #growth rate
+c_start <- 550 #time of maximum growth
+
+# function needed for visualization purposes
+sigmoid = function(params, x) {
+  params[1] / (1 + exp(-params[2] * (x - params[3])))
+}
+xlist <- 0:800
+
+#12 PIDs cannot fit with this code , 40 can - but not good enough
+avgLocation <- subset(avgLocation, PID != 6 & PID != 7 & PID !=11 & PID !=14 & PID != 19
+                      & PID != 20 & PID !=29 & PID != 32 & PID != 35 & PID != 39 & PID != 46
+                      & PID !=51)
 
 PID <- (unique(avgLocation$PID))
 PIDcount <- c(1:length(PID))
-params <- matrix(data = NA, nrow = 4, ncol = length(PID))
-y2 <- matrix(data = NA, nrow = 801, ncol = length(PID))
 
+params <- matrix(data = NA, nrow = 3, ncol = length(PID))
+y2 <- matrix(data = NA, nrow = 801, ncol = length(PID))
+halfX <- matrix(data = NA, nrow = 1, ncol = length(PID))
 for (i in PIDcount){
   index <- PID[i]
   dataOfInterest <- subset(avgLocation, PID == index)
   x <- dataOfInterest$avgLocation
   y <- dataOfInterest$wideResponse
-  
+
+  # fitting code
   df <- data.frame(x = x,
                  y = y)
   
-  a_start <- 0.9 #upper asymptote
-  b_start <- 0.01 #slope
-  c_start <- 0.1 #lower asymptote
-  d_start <- 400 #mid point
-  
-  fitmodel <- nls(y ~ I( c + ((a-c)/(1 + exp((-b/1) * (x-d))))), data = df, start=list(a=a_start, b=b_start, c=c_start, d=d_start)) 
+  fitmodel <- nls(y ~ I(a/(1 + exp(-b * (x-c)))), data = df, start=list(a=a_start, b=b_start, c=c_start)) 
   params[,i] <- coef(fitmodel)
   y2[,i] <- sigmoid(params[,i],xlist)
   plot(y2[,i],type="l", xlab = index)
+
+  #find point pp where the sigmoid crosses 50%
+  halfX[,i] <- (log(params[1,i]/(0.5))/ -params[2,i]) + params[3,i]
+  #halfX is where this corresponds to on the x axis
 }
 
 #reshuffle y2 to plot using ggpplot
