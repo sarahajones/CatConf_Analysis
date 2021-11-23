@@ -30,8 +30,6 @@ library(afex) #running ANOVA
 library(pracma) #fitting a sigmoid
 
 ###################################################
-#this is a change
-#another change
 #DATA LOADING, CLEANING, AND TIDYING
 mydir = setwd("C:/Users/saraha/Desktop/ConfCats/ConfCats_Version2/Data_V2.1/data")
 myfiles = list.files(path=mydir, pattern="zapBox_v0.2.1_*", full.names=TRUE) #pull all files
@@ -73,7 +71,7 @@ sd(ageData$participantAge) #12.7
 
 #what is the gender split?
 genderData <- subset(dat_csv, participantGender != 'NA')
-gender <- genderData$participantGender #36 female 24 male
+gender <- genderData$participantGender #36 female 23 male 1Nb
 female <- sum(gender == 'female')
 male <- sum(gender == 'male')
 nonbinary <- sum(gender == 'non-binary')
@@ -1008,84 +1006,73 @@ y <- avgLocation$wideResponse
 # fitting code
 df <- data.frame(x = x,
                  y = y)
-a_start <- 1 #upper asymptote
-b_start <- 0.1 #growth rate
-c_start <- 550 #time of maximum growth
-d_start <- 0.01 #start point not fixed to zero
+a_start <- 405  #midpoint on X value
+b_start <- 30   #slope/growth rate = -1/b
+c_start <- 0.1  #lower asymptote
+d_start <- 0.9  #upper asymptote
 
-fitmodel <- nls(y ~ I(d + (a/(1 + exp(-b * (x-c))))), data = df, start=list(a=a_start, b=b_start, c=c_start, d=d_start)) 
+fitmodel <- nls(y ~ I(c + ((d-c)/(1 + exp((-1/b) * (x-a))))), data = df, start=list(a=a_start, b=b_start, c=c_start, d=d_start)) 
 params=coef(fitmodel)
 
 # function needed for visualization purposes
 sigmoid = function(params, x) {
-  (params[1] / (1 + exp(-params[2] * (x - params[3]))))
+  (params[3] + ((params[4]-params[3])/ (1 + exp((-1/params[2]) * (x - params[1])))))
 }
 xlist <- 0:800
 y2 <- sigmoid(params,xlist)
 plot(y2,type="l") 
 
-#find point pp where the sigmoid crosses 50%
-halfX <- (log(params[1]/(0.5))/ -params[2]) + params[3]
-#halfX is where this corresponds to on the x axis
-
 ##########################################################
 #now fit a sigmoid per person 
-a_start <- 1 #upper asymptote
-b_start <- 0.1 #growth rate
-c_start <- 550 #time of maximum growth
+a_start <- 375  #midpoint on X value
+b_start <- 50 #slope/growth rate
+c_start <- 0.1  #lower asymptote
+d_start <- 0.95  #upper asymptote
 
-# function needed for visualization purposes
-sigmoid = function(params, x) {
-  params[1] / (1 + exp(-params[2] * (x - params[3])))
-}
-xlist <- 0:800
+# par <- c(a_start, b_start, c_start, d_start)
+# lower1 <- c(0, -Inf, 0, 0)
+# upper1 <- c(800,Inf,0, 1)
+# fn <- function(par, x, y){
+#   fit <- y ~ I(par[3] + ((par[4]-par[3])/(1 + exp((-1/par[2]) * (x-par[1])))))
+# }
 
-#12 PIDs cannot fit with this code , 40 can - but not good enough
-avgLocation <- subset(avgLocation, PID != 6 & PID != 7 & PID !=11 & PID !=14 & PID != 19
-                      & PID != 20 & PID !=29 & PID != 32 & PID != 35 & PID != 39 & PID != 46
-                      & PID !=51)
+avgLocation <- subset(avgLocation,  PID != 53 & PID != 60)
 
 PID <- (unique(avgLocation$PID))
 PIDcount <- c(1:length(PID))
-
-params <- matrix(data = NA, nrow = 3, ncol = length(PID))
+params <- matrix(data = NA, nrow = 4, ncol = length(PID))
 y2 <- matrix(data = NA, nrow = 801, ncol = length(PID))
-halfX <- matrix(data = NA, nrow = 1, ncol = length(PID))
+
+
 for (i in PIDcount){
   index <- PID[i]
   dataOfInterest <- subset(avgLocation, PID == index)
   x <- dataOfInterest$avgLocation
   y <- dataOfInterest$wideResponse
-  
-  # fitting code
   df <- data.frame(x = x,
                    y = y)
+  #fitmodel <- nls.lm(par, lower=lower1, upper=upper1, fn = fn, observed = df)  
+  fitmodel <- nls(y ~ I(c + ((d-c)/(1 + exp((-1/b) * (x-a))))), data = df, start=list(a=a_start, b=b_start, c=c_start, d=d_start))  
   
-  fitmodel <- nls(y ~ I(a/(1 + exp(-b * (x-c)))), data = df, start=list(a=a_start, b=b_start, c=c_start)) 
   params[,i] <- coef(fitmodel)
+  params[,i]
   y2[,i] <- sigmoid(params[,i],xlist)
   plot(y2[,i],type="l", xlab = index)
-  
-  #find point pp where the sigmoid crosses 50%
-  halfX[,i] <- (log(params[1,i]/(0.5))/ -params[2,i]) + params[3,i]
-  #halfX is where this corresponds to on the x axis
 }
 
-#reshuffle y2 to plot using ggpplot
+#reshuffle y2 to plot using ggplot
 sigmoidData <- data.frame(confidence = y2[,1])
 sigmoidData$PID <- 1
-
-
-sigmoidData$halfX <- halfX[,1]
+sigmoidData$halfX <- params[,1][1]
 sigmoidData$xlist <- c(0:800)
 newData <- data.frame(confidence = y2[,2])
 
-PID <- PID[2:40]
+PID <- PID[2:50]
 PIDcount <- c(1:length(PID))
 for (i in PIDcount){
   newData$confidence <- y2[,i+1]
   newData$PID <- PID[i]
-  newData$halfX <- halfX[,i+1]
+  newData$halfX <- params[,i+1][1]
   newData$xlist <- c(0:800)
   sigmoidData <- rbind(sigmoidData, newData)
 }
@@ -1093,13 +1080,125 @@ ggplot(sigmoidData, aes(x=xlist, y=confidence)) +
   geom_point() +
   facet_wrap( ~ PID)
 
+#Param[1] is the inferred cross over point, if this is "towards the right" that means a bias to the wide
 
-#halfX is the inferred cross over point, if this is "towards the right" that means a bias to the wide
-#would change confidence in bins 2,3,4 - closer to bound and yet still more confidence
-#do people with a "truer" distribution represntation have a biger confidence difference?
+########################################################################
+#rerun main anlysis with subj boundary as rebinning point
+#start by pulling out the halfX for each participant. 
+PID <- (unique(avgLocation$PID))
+PIDcount <- c(1:length(PID))
+halfX <- c(1:50)
+for (i in PIDcount){
+  halfX[i] <- params[,i][1] #this is the list of subjective crossover points for the 50 pp we fitted
+}
 
-crossOver <- data.frame(cross <-unique(sigmoidData$halfX))
-crossOver$PID <- PID
+#what is the dataset with the 50pp we fitted with subjective boundaries. 
+subj <- subset(confidence, PID != 53 & PID != 60 )
+
+#rebin their location data around their subjective decision points
+for (i in PID){
+  index <- which(PID == i, TRUE)
+  midline1 <- halfX[index]
+  breaks <- c(0, (midline1 - 180), (midline1 - 140), (midline1 - 100), (midline1 - 60), (midline1 - 20), 
+              (midline1 + 20), (midline1 + 60), (midline1 +100), (midline1 + 140), (midline1 + 180), 800)
+  mask <- subj$PID == i
+  subj$binnedLocation[mask] <- cut(subj$recentredFlipLocation[mask], breaks, include.lowest = TRUE,labels = c( "85", "190", "230", "270", "310", "350", "390", "430", "470", "510", "675"))
+  subj$distanceBin[mask] <- 1
+  
+  mask <- subj$binnedLocation == 5 | subj$binnedLocation == 7
+  subj$distanceBin[mask] <- 2
+  mask <- subj$binnedLocation == 4 | subj$binnedLocation == 8
+  subj$distanceBin[mask] <- 3
+  mask <- subj$binnedLocation == 3 | subj$binnedLocation == 9
+  subj$distanceBin[mask] <- 4
+  mask <- subj$binnedLocation == 2 | subj$binnedLocation == 10
+  subj$distanceBin[mask] <- 5
+  mask <- subj$binnedLocation == 1 | subj$binnedLocation == 11
+  subj$distanceBin[mask] <- 6
+  
+}
+
+#ANOVA prep
+#average out the mean confidence per participant per distanceBin
+#want the "correct responses in bins 2-5 as a function of wide or narrow. 
+
+#how do we select the correct responses - for those bins accuracy is already defined in that way. 
+
+correctSubjConfidence <- subset(subj, correct == 1)
+
+correctSubjConfN <- subset(correctSubjConfidence, distribution_name == "narrow")
+confidenceSubjPerParticipantPerBinN <- correctSubjConfN  %>% 
+  group_by(PID, distanceBin) %>%
+  summarise(grp.mean = mean(confidence)) 
+confidenceSubjPerParticipantPerBinN$distribution <- "narrow"
+
+correctSubjConfW <- subset(correctSubjConfidence, distribution_name == "wide")
+confidenceSubjPerParticipantPerBinW <- correctSubjConfW  %>% 
+  group_by(PID, distanceBin) %>%
+  summarise(grp.mean = mean(confidence)) 
+confidenceSubjPerParticipantPerBinW$distribution <- "wide"
+
+confidenceSubjPerParticipantPerBin <- rbind(confidenceSubjPerParticipantPerBinN, confidenceSubjPerParticipantPerBinW)
+
+confidenceSubjPPPB <- subset(confidenceSubjPerParticipantPerBin, distanceBin > 1 & distanceBin < 6)
+confidenceSubjPPPB$distanceBin <- as.factor(confidenceSubjPPPB$distanceBin)
+confidenceSubjPPPB$distribution<- as.factor(confidenceSubjPPPB$distribution)
+
+
+#plot out aggregate means
+confN <- subset(confidenceSubjPPPB, distribution == "narrow")
+nBins <- confN %>%
+  group_by(distanceBin)%>%
+  summarise(binMean = mean(grp.mean))
+
+nBins$distribution <- "narrow"
+
+confW <- subset(confidenceSubjPPPB, distribution == "wide")
+wBins <- confW %>%
+  group_by(distanceBin)%>%
+  summarise(binMean = mean(grp.mean))
+wBins$distribution <- "wide"
+
+bins <- rbind(nBins, wBins)
+
+ggplot(bins, aes(factor(distanceBin), y=binMean, fill=distribution))+ 
+  stat_summary(fun = mean, geom = "bar", position = position_dodge(1)) + 
+  stat_summary(fun.data = mean_se, geom = "errorbar", position = position_dodge(1), width=0.5) +
+  scale_fill_manual(values=c("#E69F00","#999999")) +
+  labs(title="Confidence across distance bins", x="Distance Bin", y="Mean Confidence")+
+  ylim(0,100)
+
+aggregate(binMean~distribution+distanceBin, data=bins, FUN=mean) #and check the grand means
+
+#run the anova
+confidenceAOV <- as.data.frame(confidenceSubjPPPB)
+confAOV <- aov_ez(id="PID", dv="grp.mean", data=confidenceAOV, within = c("distanceBin", "distribution"))
+confAOV
+
+#check the pairwise comparisons
+int_comp <- emmeans(confAOV, ~distribution | distanceBin)
+pairs(int_comp, adjust="none")
+
+
+############################################################################
+#would change confidence in bins 2,3,4? - closer to bound and yet still more confidence
+#do people with a "truer" distribution representation have a bigger confidence difference?
+
+
+#############################################################################
+#retrieving and zapping - what do they do more of?
+#zap is 1 retrieve is 0 
+average_response <- mean(as.numeric(confidence$button)) #0.53 total - slight bias to zap but almost 50:50
+
+#What response do they give as a function of confidence?
+confidence$button_label <- factor(confidence$button_label) #make dummy variables
+mylm <- lm(confidence ~ button_label, data = confidence)
+summary(mylm)$coef #not different between buttons? but numerically lower for average Zap
+
+#ask a different way, what are the proportions or repsonse relative to dist_to_bound
+mylm <- lm(distance_to_bound ~ button_label, data = confidence)
+summary(mylm)$coef #more likely to zap closer to bound
+
 
 ############################################################################
 #create an excel spreadsheet for Nick to doublecheck values
